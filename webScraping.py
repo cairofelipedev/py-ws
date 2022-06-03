@@ -1,22 +1,29 @@
 import mechanize
 from bs4 import BeautifulSoup 
 import csv
+import json
 
 
 class webScraping():
 
-    print("START....")
-
     def start_scrapig(self):
 
         regiao = input("INFORME O ESTADO (EXP.: PI/SP): ").lower()
-        url = "https://pi.olx.com.br/imoveis?f=p&sf=1&o=1" 
+
+        pags = 3
+
+        while pags > 0:
+            pags -= 1
+
+        url = f"https://{regiao}.olx.com.br/imoveis?f=p&sf=1&o=1" 
 
         browser = self.create_browser()
-        #auth = self.authentication(browser)
         html = self.request(browser, url)
         anuncios = self.get_anuncios(html, regiao)
-        #anunciante = self.get_anunciante(anuncios)
+        anunciante = self.get_anunciante(browser, anuncios)
+        self.save_file(anunciante)
+
+        print("Finalizado...")
 
     def create_browser(self):
 
@@ -65,28 +72,41 @@ class webScraping():
            produtos = ul.find_all('li') 
 
            for produto in produtos:
-               if produto.a and str(produto.a).find(regiao) >= 0 and str(produto.a).find("?f=p") < 0:
+               if produto.a and str(produto.a).find(f"https://{regiao}.olx.com.br/") >= 0 and str(produto.a).find("?f=p") < 0:
                    anuncios += [produto.a.get('href')]
 
-        print(anuncios, len(anuncios))
         return anuncios
 
-    def get_anunciante(self, anuncios):
+    def get_anunciante(self, browser, anuncios):
 
-        for anuncio in anuncios:
+        props = []
+        for index, anuncio in enumerate(anuncios):
+            print(f"{index} de {len(anuncios)}...")
 
-            html = self.req_browser(anuncio)
+            html = self.request(browser, anuncio)
             soup = BeautifulSoup(html, 'html.parser')
+            scripts = soup.find_all('script')
 
-    def save_file(self):
+            for data in scripts:
+                if str(data).find('data-json') >= 0:
+
+                    try:
+                        data = data.attrs
+                        user = json.loads(data['data-json'])['ad']['user']['name']
+                        phone = json.loads(data['data-json'])['ad']['phone']['phone'] 
+
+                        props += [{'name': user, 'telefone': phone if phone else ""}]
+
+                    except:
+                        pass
+
+        return props
+
+    def save_file(self, data):
 
         fieldnames = ['name', 'telefone']
 
-        rows = [
-            {'name': 'Albania', 'telefone': 28748},
-            {'name': 'Algeria', 'telefone': 2381741},
-            {'name': 'American Samoa', 'telefone': 199}
-        ]
+        rows = data 
 
         with open('anuncios.csv', 'w', encoding='UTF8', newline='') as f:
             writer = csv.DictWriter(f, fieldnames=fieldnames)
