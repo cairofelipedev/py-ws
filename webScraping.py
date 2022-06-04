@@ -2,6 +2,8 @@ import mechanize
 from bs4 import BeautifulSoup 
 import csv
 import json
+import time
+import sys
 
 
 class webScraping():
@@ -9,21 +11,36 @@ class webScraping():
     def start_scrapig(self):
 
         regiao = input("INFORME O ESTADO (EXP.: PI/SP): ").lower()
-
-        pags = 3
-
-        while pags > 0:
-            pags -= 1
-
-        url = f"https://{regiao}.olx.com.br/imoveis?f=p&sf=1&o=1" 
+        qtd_pags = int(input("QUANTAS PAGINAS: "))
 
         browser = self.create_browser()
-        html = self.request(browser, url)
-        anuncios = self.get_anuncios(html, regiao)
+        start = time.time()
+
+        pag = 1
+        anuncios = []
+        while pag <= qtd_pags:
+            url = f"https://{regiao}.olx.com.br/imoveis?f=p&sf=1&o={pag}" 
+
+            try:
+                html = self.request(browser, url)
+            except:
+                print("SERVIDOR SOBRECARREGADO...")
+                continue
+
+            links_anuncios = self.get_anuncios(html, regiao)
+
+            anuncios += links_anuncios
+            pag += 1
+
+        print("INICIANDO BUSCA DE ANUNCIANTES...")
         anunciante = self.get_anunciante(browser, anuncios)
         self.save_file(anunciante)
 
+        end = time.time()
+
+        _time = end - start
         print("Finalizado...")
+        print(f"Tempo...: {_time:.2f}s")
 
     def create_browser(self):
 
@@ -41,19 +58,6 @@ class webScraping():
             Fedora/3.0.1-1.fc9 Firefox/3.0.1')]
 
         return br
-
-    def authentication(self, browser):
-
-        url = "https://conta.olx.com.br/"
-        browser.open(url)
-
-        for forms in browser.forms():
-            print(forms)
-
-        browser.form['email'] = email
-        browser.form['password'] = senha
-
-        browser.submit()
 
     def request(self, browser, url):
 
@@ -83,7 +87,12 @@ class webScraping():
         for index, anuncio in enumerate(anuncios):
             print(f"{index} de {len(anuncios)}...")
 
-            html = self.request(browser, anuncio)
+            try:
+                html = self.request(browser, anuncio)
+            except:
+                print("SERVIDOR SOBRECARREGADO...")
+                continue
+
             soup = BeautifulSoup(html, 'html.parser')
             scripts = soup.find_all('script')
 
@@ -94,11 +103,12 @@ class webScraping():
                         data = data.attrs
                         user = json.loads(data['data-json'])['ad']['user']['name']
                         phone = json.loads(data['data-json'])['ad']['phone']['phone'] 
-
-                        props += [{'name': user, 'telefone': phone if phone else ""}]
+                        
+                        if phone:
+                            props += [{'name': user, 'telefone': phone}]
 
                     except:
-                        pass
+                        continue
 
         return props
 
@@ -113,8 +123,16 @@ class webScraping():
             writer.writeheader()
             writer.writerows(rows)
 
+    def debugger(self, html):
+
+        with open("log.txt", "w") as file:
+            file.write(str(html))
+
+        print("FINALIZANDO SISTEMA....")
+        sys.exit()
+
 
 if __name__ == '__main__':
 
-   web = webScraping() 
-   web.start_scrapig()
+    web = webScraping() 
+    web.start_scrapig()
